@@ -1,0 +1,9 @@
+# Auth via env vars, e.g.
+#   export SNOWFLAKE_USER=...
+#   export SNOWFLAKE_PASSWORD=...        # or SNOWFLAKE_AUTHENTICATOR=externalbrowser
+snowflake_organization_name = "MYORG"
+snowflake_account_name      = "MYACCOUNT"
+snowflake_query_role        = "SYSADMIN"
+
+# Phase gate: false -> open consent URL -> true
+snowflake_azure_consent_completed = false

@@ -1,0 +1,15 @@
+[Unit]
+Description=Tableflow demo producer (Avro over Private Link)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=demo
+WorkingDirectory=/opt/tableflow-demo/app
+EnvironmentFile=/etc/tableflow-demo/common.env
+ExecStart=/opt/tableflow-demo/venv/bin/python -u producer.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+# Confluent credentials: prefer env vars
+#   export TF_VAR_confluent_cloud_api_key=...
+#   export TF_VAR_confluent_cloud_api_secret=...
+
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
+region                = "uksouth"
+ssh_allowed_cidr      = "203.0.113.10/32"
+
+tags = {
+  owner_email     = "you@example.com"
+  owner_name      = "you"
+  cflt_service    = "CSTA"
+  cflt_managed_by = "you"
+  cflt_managed_id = "azure-pl-tableflow"
+  cflt_keep_until = "YYYY-MM-DD"
+}

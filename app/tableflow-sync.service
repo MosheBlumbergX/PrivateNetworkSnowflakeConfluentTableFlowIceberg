@@ -1,0 +1,12 @@
+[Unit]
+Description=Sync Tableflow Iceberg tables into Snowflake
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=demo
+WorkingDirectory=/opt/tableflow-demo/app
+EnvironmentFile=/etc/tableflow-demo/common.env
+EnvironmentFile=-/etc/tableflow-demo/snowflake.env
+ExecStart=/opt/tableflow-demo/venv/bin/python -u sync.py
