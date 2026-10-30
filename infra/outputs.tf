@@ -32,7 +32,7 @@ output "vm_name" {
 
 output "vm_ssh" {
   description = "SSH into the demo VM"
-  value       = "ssh -i .generated/vm_ssh_key.pem azureuser@${azurerm_public_ip.vm.ip_address}"
+  value       = "ssh -i ${abspath(local_sensitive_file.vm_ssh_key.filename)} azureuser@${azurerm_public_ip.vm.ip_address}"
 }
 
 output "confluent_environment_id" {

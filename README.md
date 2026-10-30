@@ -42,9 +42,17 @@ The approach is adapted from Jeremy Ber's
 | Tableflow -> ADLS | Confluent egress Private Link gateway (blob + dfs) | No |
 | Snowflake -> ADLS | Storage firewall allows Snowflake's Azure VNet subnets (service endpoints on the Azure backbone) | No (account is "selected networks" only) |
 | VM sync -> ADLS | Private endpoint in the VNet | No |
-| Sync -> Confluent API / Snowflake SQL | HTTPS control plane, metadata only (topic names, metadata file paths) | Yes, no customer data |
+| Sync -> Confluent API / Snowflake SQL | HTTPS control plane: topic names, metadata file paths, DDL | Yes, metadata only |
+| Producer -> Schema Registry | Public Schema Registry endpoint: Avro schemas and lookups | Yes, schemas only |
+| Users -> Snowflake | Snowsight / drivers on the public Snowflake endpoint: **query results** | Yes (private needs Snowflake inbound Private Link, Business Critical) |
 
-Snowflake option A works on any edition. On Business Critical you can swap it for Snowflake
+All Kafka record data moves privately from producer to Snowflake's storage reads. The Snowflake
+leg uses VNet service endpoints rather than Private Link: traffic stays on the Azure backbone and
+only Snowflake's subnets pass the firewall, but the storage account's public endpoint is still
+"enabled from selected networks", not disabled.
+
+Snowflake option A works on any edition but requires the Snowflake account and the storage
+account to be in the same Azure region. On Business Critical you can swap it for Snowflake
 outbound Private Endpoints (`USE_PRIVATELINK_ENDPOINT = TRUE`) and disable public network
 access on the storage account entirely.
 
@@ -83,6 +91,7 @@ Confluent's corporate tenant ("You cannot use Confluent's tenant ID as your own"
 ### 1. Azure + Confluent
 
 ```bash
+cp .env.example .env                           # fill in Confluent + Snowflake credentials
 set -a; . ./.env; set +a
 export TF_VAR_confluent_cloud_api_key=$CONFLUENT_CLOUD_API_KEY
 export TF_VAR_confluent_cloud_api_secret=$CONFLUENT_CLOUD_API_SECRET
@@ -94,7 +103,7 @@ terraform init && terraform apply
 Check the VM is producing and Tableflow is writing (discovery-only mode until Snowflake is set up):
 
 ```bash
-$(terraform output -raw vm_ssh)
+eval "$(terraform output -raw vm_ssh)"
 sudo journalctl -u tableflow-producer -n 5
 sudo journalctl -u tableflow-sync -n 20
 ```
@@ -103,8 +112,8 @@ sudo journalctl -u tableflow-sync -n 20
 
 ```bash
 cd ../snowflake
-cp terraform.tfvars.example terraform.tfvars   # org + account name
-export SNOWFLAKE_USER=... SNOWFLAKE_PASSWORD=...   # or SNOWFLAKE_AUTHENTICATOR=externalbrowser
+cp terraform.tfvars.example terraform.tfvars   # org + account name (not the locator)
+export SNOWFLAKE_USER=$SNOWFLAKE_USERNAME SNOWFLAKE_PASSWORD   # or SNOWFLAKE_AUTHENTICATOR=externalbrowser
 terraform init && terraform apply
 terraform output snowflake_azure_consent_url     # open, accept as tenant admin
 # set snowflake_azure_consent_completed = true in terraform.tfvars
@@ -117,22 +126,33 @@ terraform output query_example
 1. Show the storage account networking: public access limited to selected networks, Snowflake
    subnets only, plus the two approved `plap-*` private endpoints from Confluent.
 2. Show the Confluent environment: Enterprise cluster, Private Link Attachment, egress gateway.
-3. Query in Snowflake (`terraform output query_example`), rerun after a minute and watch counts grow.
-4. Add a topic live and watch it appear in Snowflake without touching Snowflake:
+3. Query in Snowflake (`terraform output query_example`), rerun a few minutes later and watch
+   counts grow (Tableflow commits roughly every 3 minutes at the default 50 msg/s).
+4. Add a topic live and watch it appear in Snowflake without touching Snowflake. From the VM
+   (`eval "$(terraform -chdir=infra output -raw vm_ssh)"`):
 
    ```bash
-   sudo -u demo /opt/tableflow-demo/run add_topic.py stock_orders
+   sudo -u demo /opt/tableflow-demo/run add_topic.py stock_quotes
    sudo journalctl -fu tableflow-sync
    ```
 
-   Topic names must start with `stock_` (the producer's RBAC prefix).
+   Allow about 5 minutes: the table appears in Snowflake as soon as Tableflow's first snapshot
+   lands, but that snapshot is empty; rows show up with the next one. Topic names must start
+   with `stock_` (the producer's RBAC prefix) and each name can only be used once per deployment.
 
 ## Cleanup
+
+Log in to the tenant that holds the resources (`az login --tenant <tenant-id>`), load the same
+env vars as for deploy, then destroy Snowflake first:
 
 ```bash
 cd snowflake && terraform destroy
 cd ../infra && terraform destroy
 ```
+
+Topics added live with `add_topic.py` have Tableflow enabled outside Terraform. They go away
+with the cluster; if Confluent refuses to delete the cluster, disable Tableflow on those topics
+in the Confluent Cloud console and run the destroy again.
 
 If the Confluent provider integration refuses deletion (409, still `ACTIVE`), see the
 cleanup notes in the original repo: `terraform state rm confluent_provider_integration_setup.azure`
@@ -141,10 +161,14 @@ and destroy again.
 ## Caveats
 
 - This is a stop-gap until Tableflow's IRC or catalog sync supports private networking.
-- Tableflow commits low-throughput topics on a best-effort ~5 minute cadence, so the first table
-  can take a few minutes to appear.
+- Tableflow commits on a best-effort cadence (about every 3 minutes in this demo, up to ~5 for
+  low-throughput topics) and a new topic's first snapshot is empty, so a new table takes a few
+  minutes to show rows.
 - Snowflake tables created by the sync are read-only, externally managed Iceberg tables.
-- Schema Registry uses its public endpoint (schemas only, no records).
+- Schema Registry uses its public endpoint (schemas only, no records); it supports Private Link
+  on Enterprise if you need it.
+- The demo VM has a public IP (SSH from `ssh_allowed_cidr`, package installs). Use Azure Bastion
+  and a NAT gateway for anything real.
 - Secrets reach the VM through `az vm run-command`; fine for a demo, use Key Vault for anything real.
 
 ## Credits

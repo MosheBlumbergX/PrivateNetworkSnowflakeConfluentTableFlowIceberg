@@ -37,16 +37,17 @@ resource "null_resource" "storage_firewall_snowflake_subnets" {
     subnet_ids      = join(" ", data.snowflake_system_get_snowflake_platform_info.current.azure_vnet_subnet_ids)
     storage_account = local.infra.storage_account_name
     resource_group  = local.infra.resource_group_name
+    subscription    = local.infra.azure_subscription_id
   }
 
   provisioner "local-exec" {
-    command = "for s in ${self.triggers.subnet_ids}; do az storage account network-rule add -g ${self.triggers.resource_group} --account-name ${self.triggers.storage_account} --subnet \"$s\" -o none; done"
+    command = "for s in ${self.triggers.subnet_ids}; do az storage account network-rule add --subscription ${self.triggers.subscription} -g ${self.triggers.resource_group} --account-name ${self.triggers.storage_account} --subnet \"$s\" -o none; done"
   }
 
   provisioner "local-exec" {
     when       = destroy
     on_failure = continue
-    command    = "for s in ${self.triggers.subnet_ids}; do az storage account network-rule remove -g ${self.triggers.resource_group} --account-name ${self.triggers.storage_account} --subnet \"$s\" -o none; done"
+    command    = "for s in ${self.triggers.subnet_ids}; do az storage account network-rule remove ${lookup(self.triggers, "subscription", "") != "" ? "--subscription ${lookup(self.triggers, "subscription", "")}" : ""} -g ${self.triggers.resource_group} --account-name ${self.triggers.storage_account} --subnet \"$s\" -o none; done"
   }
 }
 

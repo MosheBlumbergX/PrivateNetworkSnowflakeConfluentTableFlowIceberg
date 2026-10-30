@@ -137,7 +137,7 @@ resource "null_resource" "deploy_app" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../scripts/vm-run.sh ${azurerm_resource_group.main.name} ${azurerm_linux_virtual_machine.demo.name} ${local_sensitive_file.deploy_script.filename} DEPLOY_OK"
+    command = "${path.module}/../scripts/vm-run.sh ${var.azure_subscription_id} ${azurerm_resource_group.main.name} ${azurerm_linux_virtual_machine.demo.name} ${local_sensitive_file.deploy_script.filename} DEPLOY_OK"
   }
 
   depends_on = [

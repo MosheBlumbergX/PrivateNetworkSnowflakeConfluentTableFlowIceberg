@@ -118,7 +118,7 @@ resource "null_resource" "vm_snowflake_config" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../scripts/vm-run.sh ${local.infra.resource_group_name} ${local.infra.vm_name} ${local_sensitive_file.vm_snowflake_config[0].filename} SNOWFLAKE_CONFIG_OK"
+    command = "${path.module}/../scripts/vm-run.sh ${local.infra.azure_subscription_id} ${local.infra.resource_group_name} ${local.infra.vm_name} ${local_sensitive_file.vm_snowflake_config[0].filename} SNOWFLAKE_CONFIG_OK"
   }
 
   depends_on = [
