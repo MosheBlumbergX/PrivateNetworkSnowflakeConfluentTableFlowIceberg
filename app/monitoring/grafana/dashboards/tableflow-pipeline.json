@@ -18,6 +18,37 @@
   },
   "editable": true,
   "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "tableflow-prometheus"
+        },
+        "query": {
+          "query": "label_values(confluent_tableflow_sync_active, topic)",
+          "refId": "topicVar"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
   "panels": [
     {
       "type": "row",
@@ -52,7 +83,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_tableflow_rows_read)",
+          "expr": "sum by (topic) (confluent_tableflow_rows_read{topic=~'$topic'})",
           "legendFormat": "{{topic}} read",
           "range": true,
           "refId": "A"
@@ -63,7 +94,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_tableflow_rows_added)",
+          "expr": "sum by (topic) (confluent_tableflow_rows_added{topic=~'$topic'})",
           "legendFormat": "{{topic}} committed",
           "range": true,
           "refId": "B"
@@ -122,7 +153,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "confluent_tableflow_event_freshness_latency_milliseconds",
+          "expr": "confluent_tableflow_event_freshness_latency_milliseconds{topic=~'$topic'}",
           "legendFormat": "{{topic}} event",
           "range": true,
           "refId": "A"
@@ -133,7 +164,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "confluent_tableflow_processing_freshness_latency_milliseconds",
+          "expr": "confluent_tableflow_processing_freshness_latency_milliseconds{topic=~'$topic'}",
           "legendFormat": "{{topic}} processing",
           "range": true,
           "refId": "B"
@@ -192,7 +223,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_tableflow_read_bytes)",
+          "expr": "sum by (topic) (confluent_tableflow_read_bytes{topic=~'$topic'})",
           "legendFormat": "{{topic}} read",
           "range": true,
           "refId": "A"
@@ -203,7 +234,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_tableflow_added_bytes)",
+          "expr": "sum by (topic) (confluent_tableflow_added_bytes{topic=~'$topic'})",
           "legendFormat": "{{topic}} written",
           "range": true,
           "refId": "B"
@@ -262,7 +293,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_tableflow_snapshots_generated)",
+          "expr": "sum by (topic) (confluent_tableflow_snapshots_generated{topic=~'$topic'})",
           "legendFormat": "{{topic}}",
           "range": true,
           "refId": "A"
@@ -524,7 +555,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "max(confluent_tableflow_num_topics)",
+          "expr": "count(confluent_tableflow_num_topics)",
           "legendFormat": "topics",
           "range": true,
           "refId": "A"
@@ -597,7 +628,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "tableflow_sync_adls_total_records",
+          "expr": "tableflow_sync_adls_total_records{topic=~'$topic'}",
           "legendFormat": "{{topic}} in ADLS",
           "range": true,
           "refId": "A"
@@ -608,7 +639,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "tableflow_sync_snowflake_total_records",
+          "expr": "tableflow_sync_snowflake_total_records{topic=~'$topic'}",
           "legendFormat": "{{topic}} in Snowflake",
           "range": true,
           "refId": "B"
@@ -667,7 +698,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "tableflow_sync_adls_total_records - tableflow_sync_snowflake_total_records",
+          "expr": "tableflow_sync_adls_total_records{topic=~'$topic'} - tableflow_sync_snowflake_total_records{topic=~'$topic'}",
           "legendFormat": "{{topic}}",
           "range": true,
           "refId": "A"
@@ -726,7 +757,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "time() - tableflow_sync_adls_snapshot_timestamp_seconds",
+          "expr": "time() - tableflow_sync_adls_snapshot_timestamp_seconds{topic=~'$topic'}",
           "legendFormat": "{{topic}}",
           "range": true,
           "refId": "A"
@@ -1140,7 +1171,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_kafka_server_received_bytes) / 60",
+          "expr": "sum by (topic) (confluent_kafka_server_received_bytes{topic=~'$topic'}) / 60",
           "legendFormat": "{{topic}}",
           "range": true,
           "refId": "A"
@@ -1199,7 +1230,7 @@
             "uid": "tableflow-prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (topic) (confluent_kafka_server_retained_bytes)",
+          "expr": "sum by (topic) (confluent_kafka_server_retained_bytes{topic=~'$topic'})",
           "legendFormat": "{{topic}}",
           "range": true,
           "refId": "A"

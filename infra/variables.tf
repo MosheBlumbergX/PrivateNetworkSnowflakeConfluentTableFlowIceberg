@@ -79,3 +79,9 @@ variable "producer_messages_per_second" {
   type        = number
   default     = 50
 }
+
+variable "orders_topic" {
+  description = "Topic for the fully-managed Datagen ORDERS connector (second Tableflow source)"
+  type        = string
+  default     = "stock_orders"
+}

@@ -70,8 +70,8 @@ panels.append(row("Kafka to Tableflow  (Confluent Cloud Metrics API)", 0))
 
 panels.append(ts(
     "Records per minute: read from Kafka vs committed to Iceberg", 0, 1, 12, 8,
-    [target("sum by (topic) (confluent_tableflow_rows_read)", "{{topic}} read", "A"),
-     target("sum by (topic) (confluent_tableflow_rows_added)", "{{topic}} committed", "B")],
+    [target("sum by (topic) (confluent_tableflow_rows_read{topic=~'$topic'})", "{{topic}} read", "A"),
+     target("sum by (topic) (confluent_tableflow_rows_added{topic=~'$topic'})", "{{topic}} committed", "B")],
     unit="short", minval=0,
     desc="'read' is what Tableflow consumed from the topic, 'committed' is what landed in "
          "an Iceberg snapshot in ADLS. Tableflow commits every few minutes, so 'committed' "
@@ -80,8 +80,8 @@ panels.append(ts(
 
 panels.append(ts(
     "Materialization latency", 12, 1, 12, 8,
-    [target("confluent_tableflow_event_freshness_latency_milliseconds", "{{topic}} event", "A"),
-     target("confluent_tableflow_processing_freshness_latency_milliseconds", "{{topic}} processing", "B")],
+    [target("confluent_tableflow_event_freshness_latency_milliseconds{topic=~'$topic'}", "{{topic}} event", "A"),
+     target("confluent_tableflow_processing_freshness_latency_milliseconds{topic=~'$topic'}", "{{topic}} processing", "B")],
     unit="ms", minval=0,
     desc="Event freshness is the age of the most recently materialized record; processing "
          "freshness is how long Tableflow took to handle it. Sawtooths up between commits "
@@ -91,15 +91,15 @@ panels.append(ts(
 
 panels.append(ts(
     "Bytes per minute: read from Kafka vs written to Iceberg", 0, 9, 8, 8,
-    [target("sum by (topic) (confluent_tableflow_read_bytes)", "{{topic}} read", "A"),
-     target("sum by (topic) (confluent_tableflow_added_bytes)", "{{topic}} written", "B")],
+    [target("sum by (topic) (confluent_tableflow_read_bytes{topic=~'$topic'})", "{{topic}} read", "A"),
+     target("sum by (topic) (confluent_tableflow_added_bytes{topic=~'$topic'})", "{{topic}} written", "B")],
     unit="bytes", minval=0,
     desc="Written lands in bursts on each Iceberg commit; read stays roughly flat. The "
          "written total is usually lower thanks to Parquet compression."))
 
 panels.append(ts(
     "Iceberg snapshots committed per minute", 8, 9, 8, 8,
-    [target("sum by (topic) (confluent_tableflow_snapshots_generated)", "{{topic}}", "A")],
+    [target("sum by (topic) (confluent_tableflow_snapshots_generated{topic=~'$topic'})", "{{topic}}", "A")],
     unit="short", minval=0,
     desc="Each snapshot is a new metadata.json in ADLS, which is what sync.py then points "
          "Snowflake at. Default commit interval is about 3 minutes, so this reads 0 for a "
@@ -127,15 +127,15 @@ panels.append(stat(
 
 panels.append(stat(
     "Tableflow topics", 20, 13, 4, 4,
-    [target("max(confluent_tableflow_num_topics)", "topics", "A")]))
+    [target("count(confluent_tableflow_num_topics)", "topics", "A")]))
 
 # ---------------------------------------------------------------- ADLS -> Snowflake
 panels.append(row("ADLS to Snowflake  (sync.py, the hop no vendor metric covers)", 17))
 
 panels.append(ts(
     "Rows in the Iceberg table: ADLS vs what Snowflake can see", 0, 18, 12, 8,
-    [target("tableflow_sync_adls_total_records", "{{topic}} in ADLS", "A"),
-     target("tableflow_sync_snowflake_total_records", "{{topic}} in Snowflake", "B")],
+    [target("tableflow_sync_adls_total_records{topic=~'$topic'}", "{{topic}} in ADLS", "A"),
+     target("tableflow_sync_snowflake_total_records{topic=~'$topic'}", "{{topic}} in Snowflake", "B")],
     unit="short", minval=0, fill=4,
     desc="Both read from the Iceberg snapshot summary, so neither costs Snowflake warehouse "
          "time. The gap is the cost of having no Iceberg REST catalog to federate to on a "
@@ -143,7 +143,7 @@ panels.append(ts(
 
 panels.append(ts(
     "Rows committed to ADLS but not yet visible in Snowflake", 12, 18, 12, 8,
-    [target("tableflow_sync_adls_total_records - tableflow_sync_snowflake_total_records",
+    [target("tableflow_sync_adls_total_records{topic=~'$topic'} - tableflow_sync_snowflake_total_records{topic=~'$topic'}",
             "{{topic}}", "A")],
     unit="short", minval=0,
     desc="Measured at the start of each sync run, before it refreshes Snowflake. Returns to "
@@ -151,7 +151,7 @@ panels.append(ts(
 
 panels.append(ts(
     "Age of the newest Iceberg snapshot in ADLS", 0, 26, 8, 8,
-    [target("time() - tableflow_sync_adls_snapshot_timestamp_seconds", "{{topic}}", "A")],
+    [target("time() - tableflow_sync_adls_snapshot_timestamp_seconds{topic=~'$topic'}", "{{topic}}", "A")],
     unit="s", minval=0,
     desc="Time since Tableflow last wrote a metadata.json. Should stay around the commit "
          "interval; a steady climb means Tableflow stopped writing."))
@@ -192,14 +192,14 @@ panels.append(row("Kafka cluster", 34))
 
 panels.append(ts(
     "Topic ingress", 0, 35, 12, 7,
-    [target("sum by (topic) (confluent_kafka_server_received_bytes) / 60", "{{topic}}", "A")],
+    [target("sum by (topic) (confluent_kafka_server_received_bytes{topic=~'$topic'}) / 60", "{{topic}}", "A")],
     unit="Bps", minval=0,
     desc="The Metrics API reports bytes for the last complete minute, so this is that "
          "value divided by 60."))
 
 panels.append(ts(
     "Retained bytes", 12, 35, 12, 7,
-    [target("sum by (topic) (confluent_kafka_server_retained_bytes)", "{{topic}}", "A")],
+    [target("sum by (topic) (confluent_kafka_server_retained_bytes{topic=~'$topic'})", "{{topic}}", "A")],
     unit="bytes", minval=0))
 
 dashboard = {
@@ -215,6 +215,21 @@ dashboard = {
     "time": {"from": "now-1h", "to": "now"},
     "editable": True,
     "graphTooltip": 1,
+    "templating": {"list": [
+        {
+            "name": "topic",
+            "label": "Topic",
+            "type": "query",
+            "datasource": DS,
+            "query": {"query": "label_values(confluent_tableflow_sync_active, topic)", "refId": "topicVar"},
+            "refresh": 2,
+            "sort": 1,
+            "includeAll": True,
+            "multi": True,
+            "allValue": ".*",
+            "current": {"selected": True, "text": ["All"], "value": ["$__all"]},
+        }
+    ]},
     "panels": panels,
 }
 

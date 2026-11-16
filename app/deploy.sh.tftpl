@@ -46,6 +46,10 @@ systemctl daemon-reload
 # Create topics + register schemas over Private Link before Tableflow is enabled.
 sudo -u demo bash -c "set -a; . $ETC/common.env; set +a; /opt/tableflow-demo/venv/bin/python $APP/create_topics.py"
 
+# Bare topic (no schema) for the fully-managed Datagen ORDERS connector, which
+# brings its own schema and does not auto-create its topic on Confluent Cloud.
+sudo -u demo bash -c "set -a; . $ETC/common.env; set +a; /opt/tableflow-demo/venv/bin/python $APP/create_bare_topic.py ${orders_topic}"
+
 systemctl enable tableflow-producer.service
 systemctl restart tableflow-producer.service
 systemctl enable --now tableflow-sync.timer

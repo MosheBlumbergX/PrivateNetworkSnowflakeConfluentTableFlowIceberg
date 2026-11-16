@@ -98,7 +98,7 @@ locals {
   ]
 
   app_files = {
-    for f in ["common.py", "create_topics.py", "producer.py", "sync.py", "add_topic.py", "metrics.py", "counts.py", "check_rest_catalog.py", "requirements.txt",
+    for f in ["common.py", "create_topics.py", "create_bare_topic.py", "producer.py", "sync.py", "add_topic.py", "metrics.py", "counts.py", "check_rest_catalog.py", "requirements.txt",
     "tableflow-producer.service", "tableflow-sync.service", "tableflow-sync.timer"] :
     f => filebase64("${path.module}/../app/${f}")
   }
@@ -151,6 +151,7 @@ resource "local_sensitive_file" "deploy_script" {
     files            = local.app_files
     common_env       = local.common_env
     topics           = var.topics
+    orders_topic     = var.orders_topic
     monitoring_files = local.monitoring_files
     monitoring_env   = local.monitoring_env
   })
