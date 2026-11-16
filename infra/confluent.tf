@@ -19,6 +19,9 @@ resource "confluent_kafka_cluster" "main" {
   }
 }
 
+# Org ID is needed to build the Iceberg REST Catalog URL (check_rest_catalog.py).
+data "confluent_organization" "main" {}
+
 data "confluent_schema_registry_cluster" "main" {
   environment {
     id = confluent_environment.main.id

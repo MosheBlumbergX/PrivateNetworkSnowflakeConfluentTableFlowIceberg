@@ -1,0 +1,1241 @@
+{
+  "uid": "tableflow-pipeline",
+  "title": "Tableflow pipeline: Kafka to Iceberg to Snowflake (private networking)",
+  "description": "Confluent Cloud Metrics API for the Kafka and Tableflow legs, plus sync.py's own metrics for the ADLS to Snowflake leg that no vendor metric covers.",
+  "tags": [
+    "tableflow",
+    "confluent",
+    "snowflake",
+    "iceberg"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Kafka to Tableflow  (Confluent Cloud Metrics API)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Records per minute: read from Kafka vs committed to Iceberg",
+      "description": "'read' is what Tableflow consumed from the topic, 'committed' is what landed in an Iceberg snapshot in ADLS. Tableflow commits every few minutes, so 'committed' arrives in bursts while 'read' stays flat. These are per-minute values straight from the Metrics API, not a rate() over a cumulative counter.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_tableflow_rows_read)",
+          "legendFormat": "{{topic}} read",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_tableflow_rows_added)",
+          "legendFormat": "{{topic}} committed",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Materialization latency",
+      "description": "Event freshness is the age of the most recently materialized record; processing freshness is how long Tableflow took to handle it. Sawtooths up between commits and drops on each one. Both are Preview metrics in the Confluent Metrics API.\n\nio.confluent.tableflow/kafka_topic_offset and table_offset would give the same picture in records rather than time, but neither is published on this cluster.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "confluent_tableflow_event_freshness_latency_milliseconds",
+          "legendFormat": "{{topic}} event",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "confluent_tableflow_processing_freshness_latency_milliseconds",
+          "legendFormat": "{{topic}} processing",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Bytes per minute: read from Kafka vs written to Iceberg",
+      "description": "Written lands in bursts on each Iceberg commit; read stays roughly flat. The written total is usually lower thanks to Parquet compression.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_tableflow_read_bytes)",
+          "legendFormat": "{{topic}} read",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_tableflow_added_bytes)",
+          "legendFormat": "{{topic}} written",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Iceberg snapshots committed per minute",
+      "description": "Each snapshot is a new metadata.json in ADLS, which is what sync.py then points Snowflake at. Default commit interval is about 3 minutes, so this reads 0 for a couple of minutes and then 1.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 9,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_tableflow_snapshots_generated)",
+          "legendFormat": "{{topic}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Rows skipped",
+      "description": "Records Tableflow could not process, usually a schema problem. Should stay at zero.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 9,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(confluent_tableflow_rows_skipped) or vector(0)",
+          "legendFormat": "skipped",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tableflow syncing",
+      "description": "1 while Tableflow is actively syncing every topic to its destination format.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 9,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "min(confluent_tableflow_sync_active)",
+          "legendFormat": "active",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Stopped",
+                  "color": "red",
+                  "index": 1
+                },
+                "1": {
+                  "text": "Active",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Written to Iceberg / min",
+      "description": "io.confluent.tableflow/storage_bytes is not used here: it measures Confluent-owned buckets, and this demo writes to the customer's own ADLS account.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 13,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(confluent_tableflow_added_bytes) or vector(0)",
+          "legendFormat": "written",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tableflow topics",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 13,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max(confluent_tableflow_num_topics)",
+          "legendFormat": "topics",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "ADLS to Snowflake  (sync.py, the hop no vendor metric covers)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Rows in the Iceberg table: ADLS vs what Snowflake can see",
+      "description": "Both read from the Iceberg snapshot summary, so neither costs Snowflake warehouse time. The gap is the cost of having no Iceberg REST catalog to federate to on a private-networking cluster.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_adls_total_records",
+          "legendFormat": "{{topic}} in ADLS",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_snowflake_total_records",
+          "legendFormat": "{{topic}} in Snowflake",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 4,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rows committed to ADLS but not yet visible in Snowflake",
+      "description": "Measured at the start of each sync run, before it refreshes Snowflake. Returns to zero once sync.py issues ALTER ICEBERG TABLE ... REFRESH.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_adls_total_records - tableflow_sync_snowflake_total_records",
+          "legendFormat": "{{topic}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Age of the newest Iceberg snapshot in ADLS",
+      "description": "Time since Tableflow last wrote a metadata.json. Should stay around the commit interval; a steady climb means Tableflow stopped writing.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "time() - tableflow_sync_adls_snapshot_timestamp_seconds",
+          "legendFormat": "{{topic}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Snowflake on newest snapshot",
+      "description": "Whether every table was already pointing at the newest ADLS metadata file when the last sync run started.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 26,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "min(tableflow_sync_snowflake_current)",
+          "legendFormat": "current",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "No",
+                  "color": "red",
+                  "index": 1
+                },
+                "1": {
+                  "text": "Yes",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last sync run",
+      "description": "The systemd timer runs sync.py every 60s. Anything above two minutes means the job is failing or stopped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 13,
+        "y": 26,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "time() - tableflow_sync_last_run_timestamp_seconds",
+          "legendFormat": "age",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last sync result",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_success",
+          "legendFormat": "ok",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Failed",
+                  "color": "red",
+                  "index": 1
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Sync run duration",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 13,
+        "y": 30,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_duration_seconds",
+          "legendFormat": "duration",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tables created, refreshed and dropped per run",
+      "description": "Spikes when a topic is added live and sync.py registers it in Snowflake.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 26,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tableflow_sync_actions",
+          "legendFormat": "{{action}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Kafka cluster",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Topic ingress",
+      "description": "The Metrics API reports bytes for the last complete minute, so this is that value divided by 60.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_kafka_server_received_bytes) / 60",
+          "legendFormat": "{{topic}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Retained bytes",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "tableflow-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "tableflow-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (topic) (confluent_kafka_server_retained_bytes)",
+          "legendFormat": "{{topic}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

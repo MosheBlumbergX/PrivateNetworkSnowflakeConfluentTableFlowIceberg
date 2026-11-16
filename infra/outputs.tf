@@ -59,3 +59,19 @@ output "tableflow_table_paths" {
 output "tags" {
   value = var.tags
 }
+
+output "grafana_tunnel" {
+  description = "Open this tunnel, then browse to http://localhost:3000 (anonymous viewer, no login prompt)"
+  value       = "ssh -i ${abspath(local_sensitive_file.vm_ssh_key.filename)} -N -L 3000:localhost:3000 azureuser@${azurerm_public_ip.vm.ip_address}"
+}
+
+output "grafana_admin_password" {
+  description = "Grafana admin login, only needed to edit panels; viewing needs no login"
+  value       = random_password.grafana_admin.result
+  sensitive   = true
+}
+
+output "prometheus_tunnel" {
+  description = "Prometheus UI, useful for checking scrape health against the Metrics API"
+  value       = "ssh -i ${abspath(local_sensitive_file.vm_ssh_key.filename)} -N -L 9090:localhost:9090 azureuser@${azurerm_public_ip.vm.ip_address}"
+}

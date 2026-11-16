@@ -17,6 +17,7 @@ it would register.
 import json
 import os
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -24,6 +25,7 @@ from azure.identity import ManagedIdentityCredential
 from azure.storage.blob import ContainerClient
 
 from common import env
+from metrics import Metrics
 
 MANAGED_COMMENT = "managed-by=tableflow-sync"
 
@@ -56,14 +58,39 @@ def blob_prefix(table_path, container):
     return path.rstrip("/") + "/"
 
 
-def latest_metadata_file(container_client, prefix):
-    newest = None
-    for blob in container_client.list_blobs(name_starts_with=prefix + "metadata/"):
-        if blob.name.endswith(".metadata.json"):
-            key = (blob.last_modified, blob.name)
-            if newest is None or key > newest[0]:
-                newest = (key, blob.name)
-    return newest[1] if newest else None
+def metadata_files(container_client, prefix):
+    """{blob name: last_modified} for every Iceberg metadata file under a table."""
+    return {
+        blob.name: blob.last_modified
+        for blob in container_client.list_blobs(name_starts_with=prefix + "metadata/")
+        if blob.name.endswith(".metadata.json")
+    }
+
+
+def newest_metadata(files):
+    return max(files, key=lambda name: (files[name], name)) if files else None
+
+
+def snapshot_records(container_client, blob_name, cache):
+    """Rows in the current snapshot, read from the Iceberg metadata JSON.
+
+    Cheaper and more robust than COUNT(*) in Snowflake: no warehouse time, and
+    it still reports while the warehouse is suspended.
+    """
+    if blob_name in cache:
+        return cache[blob_name]
+    records = None
+    try:
+        body = json.loads(container_client.download_blob(blob_name).readall())
+        current = body.get("current-snapshot-id")
+        for snapshot in body.get("snapshots") or []:
+            if snapshot.get("snapshot-id") == current:
+                records = int(snapshot.get("summary", {}).get("total-records", 0))
+                break
+    except Exception as exc:  # never fail the sync over a metrics read
+        print(f"warning: could not read {blob_name}: {exc}")
+    cache[blob_name] = records
+    return records
 
 
 def table_name(topic):
@@ -87,8 +114,13 @@ def snowflake_connection():
     )
 
 
-def sync_snowflake(desired):
-    """desired: {TABLE_NAME: (topic, metadata_path_relative_to_container)}"""
+def sync_snowflake(desired, metrics, container_client, files_by_table, record_cache):
+    """desired: {TABLE_NAME: (topic, metadata_path_relative_to_container)}
+
+    Metrics describe Snowflake's state as found at the *start* of the run, before
+    this job refreshes it. That is the number worth showing: it is how far behind
+    Snowflake actually runs without an Iceberg REST catalog to federate to.
+    """
     db, schema = env("SNOWFLAKE_DATABASE"), env("SNOWFLAKE_SCHEMA")
     volume, catalog = env("SNOWFLAKE_EXTERNAL_VOLUME"), env("SNOWFLAKE_CATALOG_INTEGRATION")
     conn = snowflake_connection()
@@ -101,6 +133,8 @@ def sync_snowflake(desired):
         added = updated = removed = 0
         for name, (topic, metadata_path) in desired.items():
             fqn = f"{db}.{schema}.{name}"
+            labels = {"topic": topic, "table": name}
+
             if name not in existing:
                 cur.execute(
                     f"CREATE ICEBERG TABLE {fqn} EXTERNAL_VOLUME = '{volume}' CATALOG = '{catalog}' "
@@ -108,10 +142,28 @@ def sync_snowflake(desired):
                 )
                 print(f"created {fqn} -> {metadata_path}")
                 added += 1
+                # Nothing was visible in Snowflake before this run.
+                metrics.set("tableflow_sync_snowflake_current", 0, **labels)
+                metrics.set("tableflow_sync_snowflake_total_records", 0, **labels)
                 continue
+
             cur.execute("SELECT SYSTEM$GET_ICEBERG_TABLE_INFORMATION(%s)", (fqn,))
             current = json.loads(cur.fetchone()[0]).get("metadataLocation", "")
-            if not current.endswith(metadata_path):
+            in_sync = current.endswith(metadata_path)
+            metrics.set("tableflow_sync_snowflake_current", 1 if in_sync else 0, **labels)
+
+            # Report on whichever snapshot Snowflake was actually serving.
+            files = files_by_table.get(name, {})
+            served = metadata_path if in_sync else next(
+                (blob for blob in files if current.endswith(blob)), None
+            )
+            if served:
+                metrics.set("tableflow_sync_snowflake_snapshot_timestamp_seconds", files[served].timestamp(), **labels)
+                records = snapshot_records(container_client, served, record_cache)
+                if records is not None:
+                    metrics.set("tableflow_sync_snowflake_total_records", records, **labels)
+
+            if not in_sync:
                 cur.execute(f"ALTER ICEBERG TABLE {fqn} REFRESH '{metadata_path}'")
                 print(f"refreshed {fqn} -> {metadata_path}")
                 updated += 1
@@ -122,13 +174,16 @@ def sync_snowflake(desired):
                 print(f"dropped {db}.{schema}.{name} (Tableflow no longer enabled)")
                 removed += 1
 
+        for action, count in (("created", added), ("refreshed", updated), ("dropped", removed)):
+            metrics.set("tableflow_sync_actions", count, action=action)
+
         print(f"snowflake: {added} added, {updated} refreshed, {removed} removed, {len(desired) - added - updated} unchanged")
     finally:
         cur.close()
         conn.close()
 
 
-def main():
+def run(metrics):
     container = env("AZURE_STORAGE_CONTAINER")
     container_client = ContainerClient(
         account_url=f"https://{env('AZURE_STORAGE_ACCOUNT')}.blob.core.windows.net",
@@ -136,19 +191,50 @@ def main():
         credential=ManagedIdentityCredential(),
     )
 
-    desired = {}
-    for topic, table_path in tableflow_topics().items():
-        metadata = latest_metadata_file(container_client, blob_prefix(table_path, container))
+    topics = tableflow_topics()
+    metrics.set("tableflow_sync_topics_discovered", len(topics))
+
+    desired, files_by_table, record_cache = {}, {}, {}
+    for topic, table_path in topics.items():
+        files = metadata_files(container_client, blob_prefix(table_path, container))
+        metadata = newest_metadata(files)
         if metadata is None:
             print(f"skip {topic}: no Iceberg snapshot written yet under {table_path}")
             continue
         print(f"{topic}: latest metadata {metadata}")
-        desired[table_name(topic)] = (topic, metadata)
+
+        table = table_name(topic)
+        desired[table] = (topic, metadata)
+        files_by_table[table] = files
+
+        labels = {"topic": topic, "table": table}
+        metrics.set("tableflow_sync_adls_snapshot_timestamp_seconds", files[metadata].timestamp(), **labels)
+        records = snapshot_records(container_client, metadata, record_cache)
+        if records is not None:
+            metrics.set("tableflow_sync_adls_total_records", records, **labels)
+
+    metrics.set("tableflow_sync_tables", len(desired))
 
     if not os.environ.get("SNOWFLAKE_ACCOUNT"):
         print("discovery-only mode: Snowflake not configured yet")
         return
-    sync_snowflake(desired)
+    sync_snowflake(desired, metrics, container_client, files_by_table, record_cache)
+
+
+def main():
+    started = time.time()
+    metrics = Metrics()
+    ok = 1
+    try:
+        run(metrics)
+    except Exception:
+        ok = 0
+        raise
+    finally:
+        metrics.set("tableflow_sync_success", ok)
+        metrics.set("tableflow_sync_last_run_timestamp_seconds", started)
+        metrics.set("tableflow_sync_duration_seconds", time.time() - started)
+        metrics.write()
 
 
 if __name__ == "__main__":

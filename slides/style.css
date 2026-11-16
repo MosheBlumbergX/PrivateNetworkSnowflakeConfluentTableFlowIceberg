@@ -1,0 +1,110 @@
+/* ---- hide Slidev player chrome for a clean in-browser view ------------ */
+#slidev-goto-dialog { display: none !important; }   /* right-side slide-list menu */
+
+/* ---- design system ---------------------------------------------------- */
+:root {
+  --ink: #0b1220;
+  --muted: #5b6b85;
+  --line: #e3e8f0;
+  --accent: #2b59ff;   /* primary */
+  --accent2: #0ea5a4;  /* teal */
+  --good: #16a34a;
+  --good-bg: #ecfdf3;
+  --good-line: #abefc6;
+  --bad: #dc2626;
+  --bad-bg: #fef3f2;
+  --bad-line: #fecdca;
+  --warn: #b45309;
+  --warn-bg: #fffaeb;
+  --warn-line: #fedf89;
+}
+
+.slidev-layout {
+  color: var(--ink);
+  background: #fbfcfe;
+  padding: 2.4rem 3rem;
+}
+.slidev-layout h1 { font-weight: 750; letter-spacing: -0.02em; }
+.slidev-layout h2 {
+  font-weight: 700; letter-spacing: -0.01em; font-size: 1.9rem;
+  padding-bottom: .5rem; margin-bottom: 1.1rem;
+  border-bottom: 2px solid var(--line);
+}
+.slidev-layout h2::before {
+  content: ""; display: inline-block;
+  width: .55rem; height: 1.2rem; margin-right: .6rem; vertical-align: -0.15rem;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  border-radius: 3px;
+}
+.slidev-layout strong { color: var(--ink); }
+.slidev-layout a { color: var(--accent); }
+
+/* kicker label */
+.kicker {
+  text-transform: uppercase; letter-spacing: .14em; font-size: .72rem;
+  font-weight: 700; color: var(--accent);
+}
+
+/* cards */
+.card {
+  border: 1px solid var(--line); border-radius: 14px;
+  background: #fff; padding: 1.1rem 1.25rem;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 6px 24px -12px rgba(16,24,40,.12);
+}
+.card-good { border-color: var(--good-line); background: var(--good-bg); }
+.card-bad  { border-color: var(--bad-line);  background: var(--bad-bg);  }
+.card-warn { border-color: var(--warn-line); background: var(--warn-bg); }
+
+.pill {
+  display:inline-block; font-size:.7rem; font-weight:700; letter-spacing:.03em;
+  padding:.15rem .55rem; border-radius:999px;
+}
+.pill-good { background:var(--good); color:#fff; }
+.pill-bad  { background:var(--bad);  color:#fff; }
+
+/* stat tiles */
+.stat { text-align:center; border:1px solid var(--line); border-radius:14px; background:#fff; padding:1rem .5rem; }
+.stat .num { font-size:2rem; font-weight:780; letter-spacing:-.02em; line-height:1; }
+.stat .lab { font-size:.72rem; color:var(--muted); margin-top:.4rem; }
+.arrow { display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:var(--muted); }
+
+.rowline { color: var(--muted); font-size: .8rem; }
+
+/* cover */
+.cover-wrap {
+  position:absolute; inset:0;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgba(43,89,255,.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(14,165,164,.16), transparent 55%),
+    #0b1220;
+  color:#eaf0ff; padding:3.4rem 3.6rem; display:flex; flex-direction:column; justify-content:center;
+}
+.cover-wrap h1 { color:#fff; font-size:3.1rem; line-height:1.05; }
+.cover-wrap .sub { color:#aebbdf; font-size:1.15rem; margin-top:1rem; max-width:46ch; }
+.cover-wrap .meta { color:#7f8db5; font-size:.85rem; margin-top:2.2rem; letter-spacing:.03em; }
+.cover-wrap .tag {
+  display:inline-block; font-size:.74rem; font-weight:700; letter-spacing:.14em;
+  color:#9ecbff; border:1px solid rgba(158,203,255,.35); border-radius:999px; padding:.25rem .7rem;
+}
+
+.foot { position:absolute; right:1.6rem; bottom:1rem; font-size:.7rem; color:var(--muted); }
+
+/* ---- flow diagram (custom, replaces mermaid) -------------------------- */
+.flow { display:flex; align-items:stretch; gap:0; justify-content:center; }
+.node {
+  flex:1; min-width:0; text-align:center;
+  border:1px solid var(--line); border-radius:12px; background:#fff;
+  padding:.85rem .6rem; box-shadow:0 1px 2px rgba(16,24,40,.05);
+}
+.node .n-title { font-weight:650; font-size:.92rem; line-height:1.15; }
+.node .n-sub { font-size:.68rem; color:var(--muted); margin-top:.2rem; }
+.node-store { background:#f5f8ff; border-color:#cdddff; }
+.node-sink  { background:#f3fbf8; border-color:#b9e8dd; }
+.hop { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 .5rem; min-width:72px; }
+.hop .h-arrow { color:var(--accent); font-size:1.25rem; line-height:1; }
+.hop .h-lab { font-size:.62rem; color:var(--muted); margin-top:.25rem; text-align:center; white-space:nowrap; }
+.legend-dot { display:inline-block; width:.7rem; height:.7rem; border-radius:3px; vertical-align:-1px; margin-right:.35rem; }
+
+/* tighter default lists */
+.slidev-layout ul { line-height: 1.6; }
+.slidev-layout code { background:#eef2ff; color:#1e3a8a; padding:.08rem .35rem; border-radius:5px; font-size:.85em; }

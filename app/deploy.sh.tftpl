@@ -50,6 +50,55 @@ systemctl enable tableflow-producer.service
 systemctl restart tableflow-producer.service
 systemctl enable --now tableflow-sync.timer
 
+# ---------------------------------------------------------------------------
+# Monitoring: Prometheus + Grafana + node_exporter, all bound to 127.0.0.1 and
+# reached over an SSH tunnel. Docker is installed here rather than in
+# cloud-init because changing custom_data would force the VM to be replaced.
+# ---------------------------------------------------------------------------
+MON=/opt/tableflow-demo/monitoring
+install -d "$MON"
+
+%{ for name, content in monitoring_files ~}
+install -d "$(dirname "$MON/${name}")"
+echo '${content}' | base64 -d > "$MON/${name}"
+%{ endfor ~}
+chmod -R a+rX "$MON"
+
+# Where sync.py writes the ADLS -> Snowflake metrics for node_exporter.
+install -d -o demo -g demo -m 755 /var/lib/tableflow-demo/textfile
+
+cat > "$ETC/monitoring.env" <<'MONEOF'
+%{ for k, v in monitoring_env ~}
+${k}=${v}
+%{ endfor ~}
+MONEOF
+chmod 600 "$ETC/monitoring.env"
+
+if ! command -v docker >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq docker.io docker-compose-v2 gettext-base
+fi
+systemctl enable --now docker
+
+set -a; . "$ETC/monitoring.env"; set +a
+envsubst '$METRICS_API_KEY $METRICS_API_SECRET $KAFKA_CLUSTER_ID $SCHEMA_REGISTRY_ID' \
+  < "$MON/prometheus.yml.tpl" > "$MON/prometheus.yml"
+# Holds the Metrics API secret: readable only by the Prometheus container user.
+chown 65534:65534 "$MON/prometheus.yml"
+chmod 600 "$MON/prometheus.yml"
+
+# docker compose reads GRAFANA_ADMIN_PASSWORD from .env in the project directory.
+install -m 600 "$ETC/monitoring.env" "$MON/.env"
+
+docker compose -f "$MON/docker-compose.yaml" up -d --remove-orphans
+
+# prometheus.yml is bind-mounted, so editing it does not change the container
+# spec and `compose up -d` leaves the old config loaded. Reload it explicitly.
+# Grafana needs no equivalent: its file provisioner re-reads dashboards on a timer.
+docker kill -s HUP tableflow-prometheus >/dev/null 2>&1 || \
+  docker restart tableflow-prometheus >/dev/null
+
 sleep 5
 systemctl is-active tableflow-producer.service
 echo DEPLOY_OK

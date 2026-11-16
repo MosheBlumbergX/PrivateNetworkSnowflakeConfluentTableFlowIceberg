@@ -1,0 +1,59 @@
+# Prometheus + Grafana + node_exporter on the demo VM.
+#
+# Everything binds to 127.0.0.1 only: the VM's NSG opens port 22 from the admin
+# IP and nothing else, and Grafana is reached over an SSH tunnel
+# (ssh -L 3000:localhost:3000 ...). Anonymous viewer access is therefore safe,
+# since the only way to reach the port is through an authenticated SSH session.
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: tableflow-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - /opt/tableflow-demo/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+
+  # Scrapes the textfile sync.py writes for the ADLS -> Snowflake hop, which no
+  # Confluent metric covers, and gives VM health for free.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: tableflow-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /var/lib/tableflow-demo/textfile:/textfile:ro
+    command:
+      - --collector.textfile.directory=/textfile
+      - --no-collector.wifi
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: tableflow-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      # Open the tunnel and land straight on the pipeline dashboard.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/tableflow-pipeline.json
+    volumes:
+      - /opt/tableflow-demo/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /opt/tableflow-demo/monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus-data:
+  grafana-data:

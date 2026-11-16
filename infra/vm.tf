@@ -98,9 +98,31 @@ locals {
   ]
 
   app_files = {
-    for f in ["common.py", "create_topics.py", "producer.py", "sync.py", "add_topic.py", "requirements.txt",
+    for f in ["common.py", "create_topics.py", "producer.py", "sync.py", "add_topic.py", "metrics.py", "counts.py", "check_rest_catalog.py", "requirements.txt",
     "tableflow-producer.service", "tableflow-sync.service", "tableflow-sync.timer"] :
     f => filebase64("${path.module}/../app/${f}")
+  }
+
+  # Prometheus/Grafana assets, keyed by path relative to the monitoring dir.
+  monitoring_files = {
+    for f in [
+      "docker-compose.yaml",
+      "prometheus.yml.tpl",
+      "grafana/provisioning/datasources/prometheus.yaml",
+      "grafana/provisioning/dashboards/dashboards.yaml",
+      "grafana/dashboards/tableflow-pipeline.json",
+    ] :
+    f => filebase64("${path.module}/../app/monitoring/${f}")
+  }
+
+  # Kept out of common.env: the metrics key and Grafana password are only
+  # needed by root when rendering the Prometheus config and starting compose.
+  monitoring_env = {
+    METRICS_API_KEY        = confluent_api_key.metrics.id
+    METRICS_API_SECRET     = confluent_api_key.metrics.secret
+    KAFKA_CLUSTER_ID       = confluent_kafka_cluster.main.id
+    SCHEMA_REGISTRY_ID     = data.confluent_schema_registry_cluster.main.id
+    GRAFANA_ADMIN_PASSWORD = random_password.grafana_admin.result
   }
 
   common_env = {
@@ -116,6 +138,8 @@ locals {
     TABLEFLOW_API_SECRET       = confluent_api_key.tableflow.secret
     CONFLUENT_ENVIRONMENT_ID   = confluent_environment.main.id
     CONFLUENT_CLUSTER_ID       = confluent_kafka_cluster.main.id
+    CONFLUENT_ORG_ID           = data.confluent_organization.main.id
+    TABLEFLOW_CATALOG_HOST     = "tableflow.${var.region}.azure.confluent.cloud"
     AZURE_STORAGE_ACCOUNT      = azurerm_storage_account.adls.name
     AZURE_STORAGE_CONTAINER    = azurerm_storage_container.tableflow.name
   }
@@ -124,9 +148,11 @@ locals {
 resource "local_sensitive_file" "deploy_script" {
   filename = "${path.module}/../.generated/deploy-app.sh"
   content = templatefile("${path.module}/../app/deploy.sh.tftpl", {
-    files      = local.app_files
-    common_env = local.common_env
-    topics     = var.topics
+    files            = local.app_files
+    common_env       = local.common_env
+    topics           = var.topics
+    monitoring_files = local.monitoring_files
+    monitoring_env   = local.monitoring_env
   })
 }
 
