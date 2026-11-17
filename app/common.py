@@ -17,12 +17,14 @@ STOCK_TRADE_SCHEMA = """
     {"name": "price", "type": "double"},
     {"name": "account", "type": "string"},
     {"name": "userid", "type": "string"},
-    {"name": "trade_ts", "type": {"type": "long", "logicalType": "timestamp-millis"}}
+    {"name": "trade_ts", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "exchange", "type": ["null", "string"], "default": null}
   ]
 }
 """
 
 SYMBOLS = ["ZVZZT", "ZWZZT", "ZXZZT", "ZJZZT", "ZTEST", "ZBZX", "ZVV", "ZEXIT"]
+EXCHANGES = ["NYSE", "NASDAQ", "LSE", "TSX"]
 
 
 def env(name, default=None):
@@ -63,4 +65,5 @@ def random_trade():
         "account": f"ABC{random.randint(100, 999)}",
         "userid": f"User_{random.randint(1, 9)}",
         "trade_ts": int(time.time() * 1000),
+        "exchange": random.choice(EXCHANGES),
     }

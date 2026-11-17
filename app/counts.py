@@ -56,7 +56,7 @@ def iceberg_counts():
     )
 
     cache, result = {}, {}
-    for topic, table_path in tableflow_topics().items():
+    for topic, table_path in tableflow_topics()[0].items():
         files = metadata_files(client, blob_prefix(table_path, container))
         newest = newest_metadata(files)
         if newest is None:

@@ -39,14 +39,19 @@ def tableflow_topics():
     )
     resp.raise_for_status()
     topics = {}
+    known = set()
     for t in resp.json().get("data") or []:
         name, phase = t["spec"]["display_name"], t["status"]["phase"]
+        known.add(name)
         path = t["spec"].get("storage", {}).get("table_path")
         if phase != "RUNNING" or not path or "ICEBERG" not in t["spec"].get("table_formats", []):
             print(f"skip {name}: phase={phase} table_path={path}")
             continue
         topics[name] = path
-    return topics
+    # `known` is every Tableflow topic regardless of phase. A table is dropped only
+    # when its topic is absent from `known` (genuinely removed), never for a topic
+    # that is merely FAILED/PENDING, which would otherwise delete a healthy table.
+    return topics, known
 
 
 def blob_prefix(table_path, container):
@@ -114,7 +119,7 @@ def snowflake_connection():
     )
 
 
-def sync_snowflake(desired, metrics, container_client, files_by_table, record_cache):
+def sync_snowflake(desired, metrics, container_client, files_by_table, record_cache, known):
     """desired: {TABLE_NAME: (topic, metadata_path_relative_to_container)}
 
     Metrics describe Snowflake's state as found at the *start* of the run, before
@@ -169,10 +174,19 @@ def sync_snowflake(desired, metrics, container_client, files_by_table, record_ca
                 updated += 1
 
         for name, row in existing.items():
-            if name not in desired and (row.get("comment") or "").startswith(MANAGED_COMMENT):
-                cur.execute(f"DROP ICEBERG TABLE {db}.{schema}.{name}")
-                print(f"dropped {db}.{schema}.{name} (Tableflow no longer enabled)")
-                removed += 1
+            comment = row.get("comment") or ""
+            if name in desired or not comment.startswith(MANAGED_COMMENT):
+                continue
+            # Drop only when the topic is genuinely gone from Tableflow. A topic that
+            # still exists but is FAILED/PENDING (for example mid schema-evolution) is
+            # left alone so a transient failure never deletes a healthy Snowflake table.
+            topic = next((p[len("topic="):] for p in comment.split() if p.startswith("topic=")), "")
+            if topic and topic in known:
+                print(f"keep {db}.{schema}.{name}: topic {topic} present but not RUNNING, skipping")
+                continue
+            cur.execute(f"DROP ICEBERG TABLE {db}.{schema}.{name}")
+            print(f"dropped {db}.{schema}.{name} (topic no longer has Tableflow)")
+            removed += 1
 
         for action, count in (("created", added), ("refreshed", updated), ("dropped", removed)):
             metrics.set("tableflow_sync_actions", count, action=action)
@@ -191,7 +205,7 @@ def run(metrics):
         credential=ManagedIdentityCredential(),
     )
 
-    topics = tableflow_topics()
+    topics, known = tableflow_topics()
     metrics.set("tableflow_sync_topics_discovered", len(topics))
 
     desired, files_by_table, record_cache = {}, {}, {}
@@ -218,7 +232,7 @@ def run(metrics):
     if not os.environ.get("SNOWFLAKE_ACCOUNT"):
         print("discovery-only mode: Snowflake not configured yet")
         return
-    sync_snowflake(desired, metrics, container_client, files_by_table, record_cache)
+    sync_snowflake(desired, metrics, container_client, files_by_table, record_cache, known)
 
 
 def main():

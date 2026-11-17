@@ -46,7 +46,7 @@ def main():
 
     print(f"ADLS: {account}/{container}  (read over the blob private endpoint, managed identity)\n")
 
-    topics = tableflow_topics()
+    topics, _ = tableflow_topics()
     if not topics:
         print("No RUNNING Iceberg Tableflow topics yet.")
         return
