@@ -98,7 +98,7 @@ locals {
   ]
 
   app_files = {
-    for f in ["common.py", "create_topics.py", "create_bare_topic.py", "producer.py", "sync.py", "add_topic.py", "metrics.py", "counts.py", "check_rest_catalog.py", "requirements.txt",
+    for f in ["common.py", "create_topics.py", "create_bare_topic.py", "producer.py", "sync.py", "add_topic.py", "metrics.py", "counts.py", "check_rest_catalog.py", "show_storage.py", "requirements.txt",
     "tableflow-producer.service", "tableflow-sync.service", "tableflow-sync.timer"] :
     f => filebase64("${path.module}/../app/${f}")
   }
