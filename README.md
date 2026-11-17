@@ -117,6 +117,35 @@ A gap in `behind` is the pipeline working normally, since Kafka runs about one T
 interval ahead. Iceberg and Snowflake differing from each other is the interesting case: that is
 the window before `sync.py` refreshes, and the cost of having no Iceberg REST catalog here.
 
+### Testing schema evolution
+
+`evotest_produce.py` drives an evolution on a standalone topic (its own schema, separate from the
+shared `StockTrade`) so you can watch a new column flow all the way to Snowflake:
+
+```bash
+eval "$(terraform -chdir=infra output -raw vm_ssh)"
+sudo -u demo /opt/tableflow-demo/run evotest_produce.py stock_evotest v1 5000
+# enable Tableflow (Iceberg) on stock_evotest in the Console or via the API,
+# wait for STOCK_EVOTEST to appear in Snowflake, then:
+sudo -u demo /opt/tableflow-demo/run evotest_produce.py stock_evotest v2 5000
+```
+
+The `v2` schema adds an optional `region` field. In Snowflake the column appears with no manual
+DDL: rows written before the change read back `NULL`, rows after carry a value.
+
+Two things this surfaced, both worth knowing:
+
+- **Added fields must be optional for Tableflow.** A new field with a default (for example
+  `{"name":"exchange","type":"string","default":"UNKNOWN"}`) is accepted by Schema Registry as
+  backward-compatible, but Tableflow FAILs the topic: *"Adding required fields is currently not
+  compatible with Tableflow."* In Avro a plain `"type":"string"` is still required; the field must
+  be a nullable union (`["null","string"]`, `default null`). A FAILED topic does not self-recover,
+  it has to be disabled and re-enabled after the schema is fixed.
+- **`sync.py` must not drop a table on a transient failure.** It drops a Snowflake table only when
+  the topic is absent from the Tableflow API entirely, not when it is merely `FAILED`/`PENDING`;
+  otherwise a topic briefly leaving `RUNNING` (as during a bad evolution) would delete a healthy
+  table and break queries until it recovered.
+
 ### Monitoring
 
 Prometheus and Grafana run on the demo VM. Prometheus scrapes the Confluent Cloud
@@ -186,7 +215,7 @@ editing panels: `terraform -chdir=infra output -raw grafana_admin_password`.
 |---|---|
 | `infra/` | Azure VNet, PLATT ingress, ADLS + firewall, Confluent env/cluster/RBAC, egress gateway + access points + DNS, Tableflow, demo VM |
 | `snowflake/` | Storage firewall rule for Snowflake subnets, external volume, object-store catalog integration, DB/schema/warehouse, sync role + key-pair service user, pushes sync config to the VM |
-| `app/` | VM code: `producer.py`, `create_topics.py`, `sync.py`, `add_topic.py`, `metrics.py`, `counts.py`, `check_rest_catalog.py`, systemd units, cloud-init |
+| `app/` | VM code: `producer.py`, `create_topics.py`, `sync.py`, `add_topic.py`, `metrics.py`, `counts.py`, `check_rest_catalog.py`, `show_storage.py`, `evotest_produce.py`, systemd units, cloud-init |
 | `app/monitoring/` | Prometheus + Grafana + node_exporter compose stack, scrape config, provisioned dashboard |
 | `scripts/` | `approve-egress-endpoint.sh` (approves Confluent's private endpoints on the storage account), `vm-run.sh` (`az vm run-command` wrapper) |
 
