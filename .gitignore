@@ -11,3 +11,9 @@ crash.log
 .DS_Store
 __pycache__/
 *.log
+
+# All external communications (email, Slack, Teams, etc.) stay local, never committed
+comms/
+
+# Personal, machine-local Claude Code settings (permissions, etc.)
+.claude/settings.local.json
