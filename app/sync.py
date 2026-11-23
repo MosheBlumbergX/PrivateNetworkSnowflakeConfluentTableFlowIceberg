@@ -136,7 +136,10 @@ def sync_snowflake(desired, metrics, container_client, files_by_table, record_ca
         existing = {row["name"]: row for row in (dict(zip(cols, r)) for r in cur.fetchall())}
 
         added = updated = removed = 0
-        for name, (topic, metadata_path) in desired.items():
+        failures = []
+
+        def sync_table(name, topic, metadata_path):
+            nonlocal added, updated
             fqn = f"{db}.{schema}.{name}"
             labels = {"topic": topic, "table": name}
 
@@ -150,7 +153,7 @@ def sync_snowflake(desired, metrics, container_client, files_by_table, record_ca
                 # Nothing was visible in Snowflake before this run.
                 metrics.set("tableflow_sync_snowflake_current", 0, **labels)
                 metrics.set("tableflow_sync_snowflake_total_records", 0, **labels)
-                continue
+                return
 
             cur.execute("SELECT SYSTEM$GET_ICEBERG_TABLE_INFORMATION(%s)", (fqn,))
             current = json.loads(cur.fetchone()[0]).get("metadataLocation", "")
@@ -173,6 +176,25 @@ def sync_snowflake(desired, metrics, container_client, files_by_table, record_ca
                 print(f"refreshed {fqn} -> {metadata_path}")
                 updated += 1
 
+        # One table failing (for example one the sync role cannot see because another
+        # role owns it) must not stop the others refreshing. Failures are collected
+        # and raised after the loop so the unit still reports as failed.
+        from snowflake.connector.errors import ProgrammingError
+
+        for name, (topic, metadata_path) in desired.items():
+            try:
+                sync_table(name, topic, metadata_path)
+            except ProgrammingError as exc:
+                hint = ""
+                if exc.errno == 3041:
+                    hint = (
+                        " The table exists but is invisible to this role, so it is probably owned by another role. "
+                        f"Fix: GRANT OWNERSHIP ON ICEBERG TABLE {db}.{schema}.{name} "
+                        f"TO ROLE {env('SNOWFLAKE_ROLE')} COPY CURRENT GRANTS;"
+                    )
+                print(f"error: {db}.{schema}.{name}: {exc.msg}{hint}")
+                failures.append(name)
+
         for name, row in existing.items():
             comment = row.get("comment") or ""
             if name in desired or not comment.startswith(MANAGED_COMMENT):
@@ -192,6 +214,8 @@ def sync_snowflake(desired, metrics, container_client, files_by_table, record_ca
             metrics.set("tableflow_sync_actions", count, action=action)
 
         print(f"snowflake: {added} added, {updated} refreshed, {removed} removed, {len(desired) - added - updated} unchanged")
+        if failures:
+            raise RuntimeError(f"{len(failures)} table(s) failed to sync: {', '.join(failures)}")
     finally:
         cur.close()
         conn.close()
